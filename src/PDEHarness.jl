@@ -74,6 +74,7 @@ function diagnostics_initial(sim, d, runner::Function)
     should_perform_io(sim) && open(csvfile, "w") do io
         write(io, join(header, ","))
         write(io, join(table, ","))
+        write(io, "\n")
     end
 end
 
@@ -83,8 +84,9 @@ function diagnostics_soln(sim, t, d, runner::Function)
     output = runner(sim, t)::NamedTuple
     table = [values(output)...]
 
-    should_perform_io(sim) && open(csvfile, "w+") do io
+    should_perform_io(sim) && open(csvfile, "a") do io
         write(io, join(table, ","))
+        write(io, "\n")
     end
 end
 
