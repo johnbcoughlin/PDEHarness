@@ -73,6 +73,7 @@ function diagnostics_initial(sim, d, runner::Function)
 
     should_perform_io(sim) && open(csvfile, "w") do io
         write(io, join(header, ","))
+        write(io, "\n")
         write(io, join(table, ","))
         write(io, "\n")
     end
