@@ -4,6 +4,7 @@ using DrWatson
 using JLD2
 using Base: ImmutableDict
 using TOML
+using TimerOutputs
 
 export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout, load_from_frame!, restart_from
 
@@ -189,7 +190,7 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
                 if log
                     @info "Writing out solution" t
                 end
-                writeout_solution(sim, t, d)
+                @timeit "writeout" writeout_solution(sim, t, d)
                 next_writeout = max(next_writeout+1, searchsortedfirst(writeout_times, t))
                 if next_writeout <= length(writeout_times)
                     t_writeout = writeout_times[next_writeout]
