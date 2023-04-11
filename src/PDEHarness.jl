@@ -5,7 +5,7 @@ using JLD2
 using Base: ImmutableDict
 using TOML
 
-export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout
+export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout, load_from_frame!, restart_from
 
 include("utils.jl")
 
@@ -124,9 +124,13 @@ function writeout_solution(sim, t, d)
 end
 
 function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict; 
-    initial_dt=0.01, writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, log=true)
+    initial_dt=0.01, writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, log=true, restart_from_latest=true)
 
-    t = 0.0
+    if restart_from_latest
+        t = restart_from!(sim, d, t_end, most_recent_frame(d))
+    else
+        t = 0.0
+    end
     dt = initial_dt
 
     if 0 < diagnostics_dt < Inf
@@ -138,13 +142,13 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
     has_writeouts = 0 < writeout_dt < Inf
 
     if has_diagnostics
-        diagnostics_initial(sim, d, run_diagnostics)
+        t == 0.0 && diagnostics_initial(sim, d, run_diagnostics)
         diagnostics_times = (diagnostics_dt:diagnostics_dt:t_end) ∪ t_end
         next_diagnostic = searchsortedfirst(diagnostics_times, t)
         t_diag = diagnostics_times[next_diagnostic]
     end
     if has_writeouts
-        writeout_initial(sim, d)
+        t == 0.0 && writeout_initial(sim, d)
         writeout_times = (writeout_dt:writeout_dt:t_end) ∪ t_end
         next_writeout = searchsortedfirst(writeout_times, t)
         t_writeout = writeout_times[next_writeout]
@@ -196,5 +200,40 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
         end
     end
 end
+
+function most_recent_frame(d)
+    datafile = joinpath(mksimpath(d), "writeouts.jld2")
+    if !isfile(datafile)
+        return nothing
+    end
+    jldopen(datafile, "r") do file
+        ks = keys(file)
+        ks = filter(startswith("frame_"), ks)
+        frs = [parse(Int, split(k, "_")[2]) for k in ks]
+        isempty(frs) && return nothing
+        return maximum(frs)
+    end
+end
+
+function restart_from!(sim, d, t_end, fr=most_recent_frame(d))
+    datafile = joinpath(mksimpath(d), "writeouts.jld2")
+    if isnothing(fr)
+        return 0.0
+    end
+    @info "Restarting from frame_$fr"
+    t = jldopen(datafile, "r") do file
+        frame = file["frame_$fr"]
+        load_from_frame!(sim, frame)
+        frame["t"]
+    end
+    if t >= t_end
+        @info "frame_$fr is already at t=$t_end"
+        return t
+    end
+    should_perform_io(sim) && cp(datafile, joinpath(mksimpath(d), "up_to_frame_$fr.jld2"), force=true)
+    return t
+end
+
+function load_from_frame!(sim, frame) end
 
 end # module PDEHarness
