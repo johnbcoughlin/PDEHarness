@@ -98,7 +98,7 @@ frame_writeout(sim, t) -> Dict{String, Any}
 Return the data to be written out at the current frame, as a dictionary with string keys.
 """
 function frame_writeout(sim, t) 
-    @warn "Default frame writeout is empty" typeof(sim) typeof(t)
+    @warn "Default frame writeout is empty"
 end
 
 function writeout_initial(sim, d)
@@ -231,7 +231,8 @@ function restart_from!(sim, d, t_end, fr=most_recent_frame(d))
         @info "frame_$fr is already at t=$t_end"
         return t
     end
-    should_perform_io(sim) && cp(datafile, joinpath(mksimpath(d), "up_to_frame_$fr.jld2"), force=true)
+    copy = joinpath(mksimpath(d), "up_to_frame_$fr.jld2")
+    should_perform_io(sim) && run(`cp -f $datafile $copy`)
     return t
 end
 
