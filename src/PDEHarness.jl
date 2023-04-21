@@ -6,7 +6,7 @@ using Base: ImmutableDict
 using TOML
 using TimerOutputs
 
-export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout, load_from_frame!, restart_from
+export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout, load_from_frame!, restart_from, logpath
 
 include("utils.jl")
 
@@ -40,6 +40,7 @@ mksimpath(d::Base.ImmutableDict) = begin
     @assert is_normalized(d)
     p = datadir("sims", mysavename(d))
     mkpath(p)
+    mkpath(joinpath(p, "logs"))
     params_path = joinpath(p, "params.toml")
     !isfile(params_path) && open(params_path, "w") do io
         TOML.print(io, d, sorted=true) do x
@@ -62,6 +63,11 @@ diagnostics_csv_path(d) = begin
     @assert is_normalized(d)
     p = mksimpath(d)
     joinpath(p, "diagnostics.csv")
+end
+
+function logpath(d, sim)
+    p = mksimpath(d)
+    joinpath(p, "logs", "output.log")
 end
 
 function diagnostics_initial(sim, d, runner::Function)
