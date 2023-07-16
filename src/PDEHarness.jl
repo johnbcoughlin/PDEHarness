@@ -5,6 +5,8 @@ using JLD2
 using Base: ImmutableDict
 using TOML
 using TimerOutputs
+using ProgressMeter
+using Printf: @sprintf
 
 export integrate_stably, should_perform_io, mkplotpath, mksimpath, diagnostics_csv_path, frame_writeout, load_from_frame!, restart_from, logpath
 
@@ -115,7 +117,6 @@ end
 
 function writeout_solution(sim, t, d)
     datafile = joinpath(mksimpath(d), "writeouts.jld2")
-    @info "" datafile
 
     frame_data = frame_writeout(sim, t)
 
@@ -131,7 +132,8 @@ function writeout_solution(sim, t, d)
 end
 
 function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict; 
-    initial_dt=0.01, writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, log=true, restart_from_latest=true)
+    initial_dt=0.01, writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, log=true, restart_from_latest=true,
+    show_progress_meter=true, adaptive_dt=true)
 
     if restart_from_latest
         t = restart_from!(sim, d, t_end, most_recent_frame(d))
@@ -139,6 +141,8 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
         t = 0.0
     end
     dt = initial_dt
+
+    prog = progress_bar(sim, show_progress_meter, t_end)
 
     if 0 < diagnostics_dt < Inf
         @assert !isnothing(run_diagnostics)
@@ -163,24 +167,28 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
 
     while t < t_end
         stepdt = min(dt, t_end-t)
-        success, safety_factor = step!(sim, t, stepdt)
+        @timeit "step" success, safety_factor = step!(sim, t, stepdt)
 
         if !success
-            @info "Decreasing dt by factor of $(safety_factor)"
-            dt /= (safety_factor * 1.1)
-            continue
+            if adaptive_dt
+                log && @info "Decreasing dt by factor of $(safety_factor)"
+                dt /= safety_factor
+                continue
+            else
+                error("Failed step due to timestep restriction.\nMaximum permissible timestep was $(dt / safety_factor)")
+            end
         end
 
         @assert safety_factor <= 1.0
 
         t = min(t+stepdt, t_end) # Avoid floating point shenanigans
-        @show t
+
+        show_progress_meter && update_progress!(prog, t, stepdt)
+        log && (!show_progress_meter) && should_perform_io(sim) && @show t
 
         if has_diagnostics
             if t >= t_diag
-                if log
-                    @info "Running diagnostics" t
-                end
+                log && @info "Running diagnostics" t
                 diagnostics_soln(sim, t, d, run_diagnostics)
                 next_diagnostic = max(next_diagnostic+1, searchsortedfirst(diagnostics_times, t))
                 if next_diagnostic <= length(diagnostics_times)
@@ -193,9 +201,7 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
 
         if has_writeouts
             if t >= t_writeout
-                if log
-                    @info "Writing out solution" t
-                end
+                log && @info "Writing out solution" t
                 @timeit "writeout" writeout_solution(sim, t, d)
                 next_writeout = max(next_writeout+1, searchsortedfirst(writeout_times, t))
                 if next_writeout <= length(writeout_times)
@@ -205,6 +211,27 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
                 end
             end
         end
+    end
+    show_progress_meter && finish!(prog)
+end
+
+const PROGRESS_FACTOR = 1e12
+
+progress_bar(sim, show_progress_meter, t_end) = begin
+    if should_perform_io(sim) && show_progress_meter
+        t_big = Integer(round(big(t_end) * PROGRESS_FACTOR))
+        return Progress(t_big)
+    else
+        return nothing
+    end
+end
+
+update_progress!(progress, t, dt) = begin
+    step = Int(round(big(dt) * PROGRESS_FACTOR))
+    tstr = @sprintf("t = %10.4f", t)
+    progress.desc = tstr
+    if !isnothing(progress)
+        next!(progress, step=step)
     end
 end
 
