@@ -132,8 +132,11 @@ function writeout_solution(sim, t, d)
 end
 
 function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict; 
-    initial_dt=0.01, writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, log=true, restart_from_latest=true,
-    show_progress_meter=true, adaptive_dt=true)
+    initial_dt=0.001, 
+    writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, 
+    log=true, restart_from_latest=true,
+    show_progress_meter=true, adaptive_dt=true,
+    per_step_callback=nothing)
 
     if restart_from_latest
         t = restart_from!(sim, d, t_end, most_recent_frame(d))
@@ -151,6 +154,7 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
     end
     has_diagnostics = 0 < diagnostics_dt < Inf && !isnothing(run_diagnostics)
     has_writeouts = 0 < writeout_dt < Inf
+    has_callback = !isnothing(per_step_callback)
 
     if has_diagnostics
         t == 0.0 && diagnostics_initial(sim, d, run_diagnostics)
@@ -185,6 +189,10 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
 
         show_progress_meter && update_progress!(prog, t, stepdt)
         log && (!show_progress_meter) && should_perform_io(sim) && @show t
+
+        if has_callback
+            per_step_callback(sim, t, mksimpath(d))
+        end
 
         if has_diagnostics
             if t >= t_diag
