@@ -39,6 +39,9 @@ mysavename(d) = begin
 end
 
 mksimpath(d::Base.ImmutableDict) = begin
+    if "##simpath##" ∈ keys(d)
+        return d["##simpath##"]
+    end
     @assert is_normalized(d)
     p = datadir("sims", mysavename(d))
     mkpath(p)
@@ -136,7 +139,7 @@ function integrate_stably(step!, sim, t_end, d::Base.ImmutableDict;
     writeout_dt=Inf, diagnostics_dt=Inf, run_diagnostics=nothing, 
     log=true, restart_from_latest=true,
     show_progress_meter=true, adaptive_dt=true,
-    per_step_callback=nothing)
+    per_step_callback=nothing, kwargs...)
 
     if restart_from_latest
         t = restart_from!(sim, d, t_end, most_recent_frame(d))
