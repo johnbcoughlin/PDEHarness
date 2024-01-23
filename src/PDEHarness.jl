@@ -275,8 +275,16 @@ function restart_from!(sim, d, t_end, fr=most_recent_frame(d))
         @info "frame_$fr is already at t=$t_end"
         return t
     end
-    copy = joinpath(mksimpath(d), "up_to_frame_$fr.jld2")
-    should_perform_io(sim) && run(`cp -f $datafile $copy`)
+    if should_perform_io(sim)
+        cd(mksimpath(d)) do
+            tmp_copy = joinpath("tmp_up_to_frame_$fr.jld2")
+            run(`cp -f $datafile $tmp_copy`)
+            foreach(rm, filter(contains(r"^up_to_frame_\d+.jld2"), readdir()))
+            copy = joinpath("up_to_frame_$fr.jld2")
+            run(`cp -f $tmp_copy $copy`)
+            rm(tmp_copy)
+        end
+    end
     return t
 end
 
