@@ -288,6 +288,8 @@ function restart_from!(sim, d, t_end, fr=most_recent_frame(d))
     return t
 end
 
-function load_from_frame!(sim, frame) end
+function load_from_frame!(sim, frame) 
+    error("Unimplemented")
+end
 
 end # module PDEHarness
